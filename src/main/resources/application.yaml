@@ -1,0 +1,12 @@
+
+server:
+  port: 8005
+spring:
+  data:
+    mongodb:
+      host: 81.70.4.127
+      database: ns-saas
+      port: 27017
+      username: ns-admin
+      password: 2b8ba2ded188!2b8ba2ded188@
+      authentication-database: admin
