@@ -3576,7 +3576,7 @@ class DataConversionApplicationTests {
 
     @Test
     void zhenliaodayclear(){
-        String keshiku ="com.ns.entity.object.form.instance.nsjgpv79iu55j528ig78.zhenliaobiaoanri_1";
+        String keshiku ="com.ns.entity.object.form.instance.ns3g475kl6jj2eb4ixfi.yibaozhenduanxinxi_1";
         List<Map> all = mongoTemplate.findAll(Map.class,keshiku);
         if(all.size()>0){
             mongoTemplate.remove(new Query(),keshiku);

@@ -9,3 +9,8 @@ spring:
       username: ns-admin
       password: 2b8ba2ded188!2b8ba2ded188@
       authentication-database: admin
+  redis:
+    host: 192.168.157.11
+    port: 6881
+    database: 0
+    timeout: 30000
