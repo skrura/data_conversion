@@ -11,6 +11,7 @@ import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
@@ -3046,8 +3047,6 @@ class DataConversionApplicationTests {
         TypedAggregation<Map> TypedAggregation = Aggregation.newAggregation(
                 Map.class,
                 Aggregation.group("danjuhao_12")
-                        .sum("yiliaofeizonge_6.value").as("jin")
-                        .sum("tongchouzhifujine_5").as("yjin")
         ).withOptions(Aggregation.newAggregationOptions().allowDiskUse(true).build());;
 
         AggregationResults<Map> aggregationResults = mongoTemplate.aggregate(
@@ -5812,41 +5811,21 @@ class DataConversionApplicationTests {
     }
 
     @Test
-    void CSVImport() throws IOException {
-        FileReader reader = new FileReader("D:\\桌面\\ceshi.csv");
-        BufferedReader br = new BufferedReader(reader);
+    void sss()  {
+        TypedAggregation<Map> TypedAggregation2 = Aggregation.newAggregation(
+                Map.class,
+                Aggregation.sort(Sort.by(Sort.Order.asc("diag_dr_code"))).and(Sort.by(Sort.Order.asc("_id"))),
+                Aggregation.lookup("menuTest","diag_dr_name","yes","biao"),
+                Aggregation.project("diag_dr_code","_id","diag_dr_name","biao.no","biao.yes"));
 
-        String line;
-        List<Document> batchDocuments = new ArrayList<>();
-        while ((line = br.readLine()) != null) {
-            List<String> list = new ArrayList<>();
-            Document doc = new Document();
-            line=line+",1";
-            list = Arrays.asList(line.split(","));
-            //就诊号
-            doc.put("eposide_id",list.get(0));
-            //出入院诊断类别
-            doc.put("inout_diag_type",list.get(1));
-            //诊断类别
-            doc.put("diag_type",list.get(2));
-            //是否为主诊
-            doc.put("main_flag",list.get(3));
-            //诊断代码
-            doc.put("diag_code",list.get(4));
-            //诊断名称
-            doc.put("diag_name",list.get(5));
-            //入院病情
-            doc.put("adm_cond",list.get(6));
-            //诊断科室
-            doc.put("diag_dept",list.get(7));
-            //诊断医师代码
-            doc.put("diag_dr_code",list.get(8));
-            //诊断医师姓名
-            doc.put("diag_dr_name",list.get(9));
-            //诊断时间
-            doc.put("diag_time",list.get(10));
-            batchDocuments.add(doc);
-        }
+        AggregationResults<Map> aggregationResults2 = mongoTemplate.aggregate(
+                TypedAggregation2,
+                "测试",
+                Map.class);
+
+        List<Map> mappedResults2 = aggregationResults2.getMappedResults();
+        ArrayList list = (ArrayList) mappedResults2.get(0).get("yes");
+        list.get(0);
     }
 
 

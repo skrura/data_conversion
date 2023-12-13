@@ -46,13 +46,12 @@ public class ImportController {
        return importService.importsDataOpt(collectionName, target,filepath);
     }
 
-   /* @GetMapping("datagov")
-    private void DataGovernance(@RequestParam(required = true, defaultValue = "") String zhenduan,
-                                @RequestParam(required = true, defaultValue = "") String jiesuan,
-                                @RequestParam(required = true, defaultValue = "") String mingxi,
-                                @RequestParam(required = true, defaultValue = "") String target,
+    @GetMapping("datagovern")
+     private String DataGovernance(@RequestParam(required = true, defaultValue = "") String target,
+                                   @RequestParam(required = true, defaultValue = "") String collectionName,
+                                   @RequestParam(required = true, defaultValue = "") int theadnum
                                 ) {
-
-    }*/
+        return importService.gapControl(target,collectionName,theadnum);
+    }
 }
 

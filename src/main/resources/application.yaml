@@ -7,7 +7,7 @@ spring:
       database: ns-saas
       port: 27017
       username: ns-admin
-      password: 2b8ba2ded188!2b8ba2ded188@
+      password: 2b8ba2ded188
       authentication-database: admin
   redis:
     host: 192.168.157.11
