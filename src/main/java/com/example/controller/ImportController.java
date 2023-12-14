@@ -1,22 +1,7 @@
 package com.example.controller;
 
 import com.example.service.ImportService;
-import com.mongodb.ConnectionString;
-import com.mongodb.MongoClientSettings;
-import com.mongodb.WriteConcern;
-import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoClients;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
-import com.mongodb.client.model.InsertManyOptions;
-import lombok.extern.slf4j.Slf4j;
-import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.PropertySource;
-import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.*;
@@ -41,17 +26,25 @@ public class ImportController {
      */
     @GetMapping("csv")
     public String importsDataOpt(@RequestParam(required = true, defaultValue = "") String collectionName,
-                               @RequestParam(required = true, defaultValue = "") String target,
-                               @RequestParam(required = true, defaultValue = "") String filepath) {
-       return importService.importsDataOpt(collectionName, target,filepath);
+                                 @RequestParam(required = true, defaultValue = "") String target,
+                                 @RequestParam(required = true, defaultValue = "") String filepath) {
+        return importService.importsDataOpt(collectionName, target, filepath);
+    }
+
+    @GetMapping("gapdatagovern")
+    private String GapDataGovernance(@RequestParam(required = true, defaultValue = "") String target,
+                                     @RequestParam(required = true, defaultValue = "") String collectionName,
+                                     @RequestParam(required = true, defaultValue = "") int theadnum
+    ) {
+        return importService.gapControl(target, collectionName, theadnum);
     }
 
     @GetMapping("datagovern")
-     private String DataGovernance(@RequestParam(required = true, defaultValue = "") String target,
+    private String ZDataGovernance(@RequestParam(required = true, defaultValue = "") String target,
                                    @RequestParam(required = true, defaultValue = "") String collectionName,
                                    @RequestParam(required = true, defaultValue = "") int theadnum
-                                ) {
-        return importService.gapControl(target,collectionName,theadnum);
+    ) {
+        return importService.statisticsControl(target, collectionName, theadnum);
     }
 }
 
