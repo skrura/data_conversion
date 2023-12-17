@@ -20,15 +20,15 @@ public class ImportController {
     /**
      * 原始三张表
      *
-     * @param collectionName 在mongo中的表全称 例：com.ns.entity.object.form.instance.ns3g475kl6jj2eb4ixfi.yibaozhenduanxinxi_1
-     * @param target         要导入的表 zhenduan:医保_诊断信息 jiesuan: 医保_费用结算信息 mingxi:医保_费用明细信息
-     * @param filepath       csv文件路径 中文需编码处理
+     * @param collectionName 在mongodb中的表全称 例：com.ns.entity.object.form.instance.ns3g475kl6jj2eb4ixfi.yibaozhenduanxinxi_1
+     * @param filepath       csv文件路径
      */
-    @GetMapping("csv")
-    public String importsDataOpt(@RequestParam(required = true, defaultValue = "") String collectionName,
-                                 @RequestParam(required = true, defaultValue = "") String target,
-                                 @RequestParam(required = true, defaultValue = "") String filepath) {
-        return importService.importsDataOpt(collectionName, target, filepath);
+    @GetMapping("zhenduan")
+    public String zhenduan(@RequestParam(required = true, defaultValue = "") String collectionName,
+                                 @RequestParam(required = true, defaultValue = "") String filepath,
+                                 @RequestParam(required = true, defaultValue = "") int theadNum,
+                                 @RequestParam(required = true, defaultValue = "") int size) {
+        return importService.importsDataOpt(collectionName, filepath,size,theadNum);
     }
 
     @GetMapping("gapdatagovern")

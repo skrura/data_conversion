@@ -1,5 +1,7 @@
 package com.example.service;
 
+import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.io.IoUtil;
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
@@ -7,6 +9,7 @@ import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.InsertManyOptions;
+import com.opencsv.CSVReader;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,14 +21,17 @@ import org.springframework.data.mongodb.core.aggregation.TypedAggregation;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
+
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.Stream;
 
 import static com.mongodb.WriteConcern.ACKNOWLEDGED;
 import static java.lang.Math.floor;
-import static java.lang.Math.scalb;
+
 
 @Service
 public class ImportService {
@@ -45,20 +51,22 @@ public class ImportService {
      * 原始三张表
      *
      * @param collectionName
-     * @param target
      */
-    public String importsDataOpt(String collectionName, String target, String filepath) {
-        //String filepath = "D:\\桌面\\第一人民门诊明细.csv";
+    public String importsDataOpt(String collectionName, String filepath, int size, int theadnum) {
+        filepath = "D:\\桌面\\第一人民门诊明细.csv";
         //转换数据方便数据分发
-        List<String> csvData = dataExtraction(filepath, target);
+        Collection<List<String>> csvData = dataExtraction(filepath, size, theadnum);
+        //数据转换
+        List<List<String>> result = new ArrayList<>(csvData);
         //数据分发
-        List<List<String>> csvDataList = dataDistribution(csvData);
+        List<List<List<String>>> csvDataList = dataDistribution(result,theadnum);
         CountDownLatch latch = new CountDownLatch(8);
         //开启线程
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < theadnum; i++) {
             int finalI = i;
             new Thread(() -> {
-                read(csvDataList.get(finalI), collectionName, target, finalI);
+                //主要导库操作
+                read(csvDataList.get(finalI), collectionName, "zhenduan", finalI);
                 latch.countDown();
             }).start();
         }
@@ -472,7 +480,7 @@ public class ImportService {
                 Aggregation.project("medical_name", "card_id", "patient_name", "benefit_type", "medical_mode", "eposide_id", "dept_name",
                         "discharge_dept_name", "doctor_code", "doctor_name", "zhenduan.main_flag", "zhenduan.diag_name",
                         "jiesuan.area_name_person", "jiesuan.medical_type", "jiesuan.medical_grade", "jiesuan.medical_nature",
-                        "jiesuan.birthday","jiesuan.age","jiesuan.sex","jiesuan.company_name","jiesuan.money_total","jiesuan.money_medical")
+                        "jiesuan.birthday", "jiesuan.age", "jiesuan.sex", "jiesuan.company_name", "jiesuan.money_total", "jiesuan.money_medical")
         ).withOptions(Aggregation.newAggregationOptions().allowDiskUse(true).build());
 
         AggregationResults<Map> aggregationResults0 = mongoTemplate.aggregate(
@@ -528,7 +536,7 @@ public class ImportService {
                 Map.class,
                 Aggregation.limit(limit),
                 Aggregation.skip(skip),
-                Aggregation.sort(Sort.by(Sort.Order.asc("social_card"))).and(Sort.by(Sort.Order.asc("in_date"))),
+                Aggregation.group("social_card"),
                 Aggregation.match(criteria),
                 Aggregation.lookup(table1, "eposide_id", "eposide_id", "zhenduan"),
                 Aggregation.project("area_name", "area_name_person", "medical_name",
@@ -548,48 +556,26 @@ public class ImportService {
 
     /**
      * @param filepath
-     * @param target
+     * @param size
      * @return
      */
-    private List<String> dataExtraction(String filepath, String target) {
-        int size = 0;
-        switch (target) {
-            case "zhenduan":
-                size = 11;
-                break;
-            case "jiesuan":
-                size = 36;
-                break;
-            case "mingxi":
-                size = 44;
-                break;
-        }
+    private Collection<List<String>> dataExtraction(String filepath, int size, int theadNum) {
         try {
-            BufferedReader br = new BufferedReader(new FileReader(filepath), 81920);
-            String line;
-            List<String> list = new ArrayList<>();
+            String[] line;
+            Collection<List<String>> list = Collections.synchronizedCollection(Arrays.asList());
             List<String> joint = new ArrayList<>();
-            String record = null;
-            line = br.readLine();
-            while ((line = br.readLine()) != null) {
-                line = line + ",1";
-                line = line.replace("\"", "");
-                //判断长度 看是否换行拼接下一行逻辑
-                if (joint.isEmpty()) {
-                    joint = Arrays.asList(line.split(","));
-                    record = line;
-                    record = record.substring(0, record.length() - 2);
-                    if (joint.size() >= size + 1) {
-                        joint = new ArrayList<>();
-                        list.add(line);
-                    }
-                } else {
-                    record += line;
-                    joint = new ArrayList<>();
-                    list.add(record);
+            File touch = FileUtil.touch(filepath);
+            FileInputStream fileInputStream = IoUtil.toStream(touch);
+            BufferedReader utf8Reader = IoUtil.getUtf8Reader(fileInputStream);
+            Stream<String> lines = utf8Reader.lines();
+            Integer jointLen = 0;
+            lines.parallel().forEach(s -> {
+                try (CSVReader csvReader = new CSVReader(new StringReader(s))) {
+                    addLine(list, csvReader.readNext(), joint, size);
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-            }
-            br.close();
+            });
             return list;
         } catch (Exception e) {
             e.printStackTrace();
@@ -598,24 +584,42 @@ public class ImportService {
     }
 
     /**
+     *  每行加入List 逻辑
+     * @param list
+     * @param line
+     * @param joint
+     * @param size
+     */
+    void addLine(Collection<List<String>> list, String[] line, List<String> joint, int size) {
+        List<String> linel = new ArrayList<>(Arrays.asList(line));
+        joint.addAll(linel);
+        if (joint.size()==size){
+            List<String> jointCopy = new ArrayList<>(joint); // 创建joint的副本
+            joint.clear();
+            list.add(jointCopy);
+        }
+    }
+
+
+    /**
      * csv数据分发
      *
      * @param csvData
      * @return
      */
-    public List<List<String>> dataDistribution(List<String> csvData) {
-        List<List<String>> distributionData = new ArrayList<>();
+    public List<List<List<String>>> dataDistribution(List<List<String>> csvData,int theadNum) {
+        List<List<List<String>>> distributionData = new ArrayList<>();
         int size = csvData.size();
 
         //计算各个线程可以整块分发的最大数据量
-        amountData = (int) floor(size / 8);
+        amountData = (int) floor(size / theadNum);
         List a = new ArrayList<>();
         int end = 0;
-        for (Integer i = 0; i < 8; i++) {
-            List<String> data = new ArrayList<>();
+        for (Integer i = 0; i < theadNum; i++) {
+            List<List<String>> data = new ArrayList<>();
             int begin = (int) (i * amountData);
             end = (int) ((i + 1) * amountData);
-            if (i == 7)
+            if (i == theadNum-1)
                 data = csvData.subList(begin, size);
             else
                 data = csvData.subList(begin, end);
@@ -632,7 +636,7 @@ public class ImportService {
      * @param target
      * @param theadId
      */
-    public void read(List<String> csvData, String collectionName, String target, int theadId) {
+    public void read(List<List<String>> csvData, String collectionName, String target, int theadId) {
 
         String connectionString = "mongodb://" + this.host + ":" + this.port;
         // 构建 MongoClientSettings
@@ -654,10 +658,8 @@ public class ImportService {
 
             int i = 1;
             Long skip = (long) (theadId * amountData);
-            for (String csvDatum : csvData) {
-                List<String> list = new ArrayList<>();
+            for (List<String> csvDatum : csvData) {
                 Document doc = new Document();
-                list = Arrays.asList(csvDatum.split(","));
                 //系统字段
                 String mainId = UUID.randomUUID().toString();
                 doc.put("_id", mainId);
@@ -675,13 +677,13 @@ public class ImportService {
                 //业务字段
                 switch (target) {
                     case "zhenduan":
-                        doc = zhenduanfield(list, doc);
+                        doc = zhenduanfield(csvDatum, doc);
                         break;
                     case "jiesuan":
-                        doc = jiesuanfield(list, doc);
+                        doc = jiesuanfield(csvDatum, doc);
                         break;
                     case "mingxi":
-                        doc = mingxifield(list, doc);
+                        doc = mingxifield(csvDatum, doc);
                 }
                 //zone
                 doc.put("zone", i + skip);

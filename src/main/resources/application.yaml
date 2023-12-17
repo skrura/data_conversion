@@ -5,7 +5,7 @@ spring:
     mongodb:
       host: 192.168.157.11
       database: ns-saas
-      port: 27017
+      port: 27018
       username: ns-admin
       password: 2b8ba2ded188
       authentication-database: admin
@@ -14,3 +14,189 @@ spring:
     port: 6881
     database: 0
     timeout: 30000
+zhenduan:
+  # 就诊号
+  eposide_id: 1
+  # 出入院诊断类别
+  inout_diag_type: 2
+  # 诊断类别
+  diag_type: 3
+  # 是否为主诊
+  main_flag: 4
+  # 诊断代码
+  diag_code: 5
+  # 诊断名称
+  diag_name: 6
+  # 入院病情
+  adm_cond: 7
+  # 诊断科室
+  diag_dept: 8
+  # 诊断医师代码
+  diag_dr_code: 9
+  # 诊断医师姓名
+  diag_dr_name: 10
+  # 诊断时间
+  diag_time: 11
+
+jiesuan:
+  #结算单据号
+  bill_id: 1
+  #统筹区名称
+  area_name: 2
+  #参保人统筹区名称
+  area_name_person: 3
+  #医保年度
+  year: 4
+  #定点机构编码
+  medical_code: 5
+  #定点机构名称
+  medical_name: 6
+  #定点机构类别
+  medical_type: 7
+  #定点机构等级
+  medical_grade: 8
+  #定点机构性质
+  medical_nature: 9
+  #社会保障卡号
+  social_card: 10
+  #患者证件号码
+  card_id: 11
+  #患者姓名
+  patient_name: 12
+  #患者出生日期
+  birthday: 13
+  #患者年龄
+  age: 14
+  #性别
+  sex: 15
+  #单位名称
+  company_name: 16
+  #险种类型
+  benefit_type: 17
+  #医疗类别
+  medical_mode: 18
+  #就诊号
+  eposide_id: 19
+  #费用结算时间
+  clear_time: 20
+  #医疗费总额
+  money_total: 21
+  #医保范围费用
+  money_medical: 22
+  #特殊病种标识
+  is_special: 23
+  #入院日期
+  in_date: 24
+  #出院日期
+  out_date: 25
+  #住院天数
+  hospital_num: 26
+  #入院诊断疾病编码
+  in_diagnose_code: 27
+  #入院疾病名称
+  in_diagnose_name: 28
+  #出院疾病诊断编码
+  out_diagnose_code: 29
+  #出院疾病名称
+  out_diagnose_name: 30
+  #入院科室名称
+  dept_name: 31
+  #出院科室名称
+  out_dept_name: 32
+  #主治医生代码
+  doctorcode: 33
+  #主治医生
+  doctorname: 34
+  #离院方式
+  discharge_kind: 35
+  #异地就诊标志
+  nonlocal_org_sign: 36
+mingxi:
+  #统筹区划代码
+  area_code: 1
+  #参保人统筹区代码
+  area_person_code: 2
+  #定点机构编码
+  medical_code: 3
+  #定点机构名称
+  medical_name: 4
+  #社会保障卡号
+  social_card: 5
+  #证件号码
+  card_id: 6
+  #人员编号
+  psn_no: 7
+  #姓名
+  patient_name: 8
+  #险种类型
+  benefit_type: 9
+  #医疗类别
+  medical_mode: 10
+  #就诊号
+  eposide_id: 11
+  #单据号
+  bill_id: 12
+  #单据明细号
+  bill_detail_id: 13
+  #门诊或住院号
+  hospital_id: 14
+  #费用发生时间
+  cost_time: 15
+  #费用结算时间
+  clear_time: 16
+  #
+  item_code: 17
+  #医保目录名称
+  item_name: 18
+  #机构收费项目编码
+  item_code_hosp: 19
+  #机构收费项目名称
+  item_name_hosp: 20
+  #收费项目类别
+  charge_type: 21
+  #费用类别
+  cost_type: 22
+  #单价
+  unit_price: 23
+  #限价
+  max_price: 24
+  #帖数
+  dose: 25
+  #数量
+  num: 26
+  #金额
+  money: 27
+  #自付比例
+  pay_per_retio: 28
+  #医保范围费用
+  money_medical: 29
+  #自理费用
+  money_self_pay: 30
+  #自费费用
+  money_self_out: 31
+  #剂型
+  dosage_form: 32
+  #规格
+  spec: 33
+  #药品剂型单位
+  pack_unit: 34
+  #生产企业
+  bus_produce: 35
+  #药品包装转化比
+  pack_retio: 36
+  #特殊病种标识
+  is_special: 37
+  #是否处方药
+  is_recipel: 38
+  #单复方标志
+  is_single: 39
+  #处方号
+  recipel_no: 40
+  #科室名称
+  dept_name: 41
+  #执行科室名称
+  discharge_dept_name: 42
+  #医生编码
+  doctor_code: 43
+  #医生姓名
+  doctor_name: 44
