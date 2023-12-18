@@ -15,6 +15,7 @@ import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -5857,39 +5858,54 @@ class DataConversionApplicationTests {
     @Test
     void openCsv() throws Exception {
         int size = 12;
-        try {
-            String[] line;
-            Collection<List<String>> collection = new ArrayList<>();
-            Collection<List<String>> list = Collections.synchronizedCollection(collection);
-            List<String> joint = new ArrayList<>();
-            File touch = FileUtil.touch("D:\\桌面\\1.csv");
-            FileInputStream fileInputStream = IoUtil.toStream(touch);
-            BufferedReader utf8Reader = IoUtil.getUtf8Reader(fileInputStream);
-            Stream<String> lines = utf8Reader.lines();
-            lines.parallel().forEach(s -> {
-                try (CSVReader csvReader = new CSVReader(new StringReader(s))) {
-                    addLine(list, csvReader.readNext(), joint, size);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            });
-            for (List<String> strings : list) {
-                for (String string : strings) {
-                    System.out.println(string);
-                }
+        {
+            try {
+                //初始化线程安全集合存储数据 一条行数据对应一个List<String>
+                List<List<String>> list = new ArrayList<>();
+                // 拼接换行数据需要
+                Collection<String> joint = Collections.synchronizedCollection(new ArrayList<>());
+                // 获取文件
+                File touch = FileUtil.touch("D:\\桌面\\换行.csv");
+                // 创建一个文件输入流
+                FileInputStream fileInputStream = IoUtil.toStream(touch);
+                // 创建一个可以读取UTF-8编码的BufferedReader
+                BufferedReader utf8Reader = IoUtil.getUtf8Reader(fileInputStream);
+                // 读取所有行并转换为Stream(延迟求值) 需要处理才会读取
+                Stream<String> lines = utf8Reader.lines();
+                //System.out.println(lines.count());
+                // 对每一行进行并行处理
+                lines.parallel().forEach(s -> {
+                    synchronized (this){
+                        List<String> next = new ArrayList<>();
+                        try (CSVReader reader = new CSVReader(new StringReader(s))) {
+                            // 读取下一行并添加到列表中
+                            next = Arrays.asList(reader.readNext());
+                            if(next.size()<12)
+                                System.out.println("xx");
+                            list.add(next);
+                        } catch (IOException | CsvValidationException e) {
+                            //利用csv引号异常判断出换行
+                            joint.addAll(next);
+                            if (joint.size() == size) {
+                                List<String> jointCopy = new ArrayList<>(joint); // 创建joint的副本
+                                System.out.println("换行"+jointCopy);
+                                joint.clear();
+                                list.add(jointCopy);
+                            }
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-     void addLine(Collection<List<String>> list, String[] line, List<String> joint, int size) {
-        List<String> linel = new ArrayList<>(Arrays.asList(line));
-        joint.addAll(linel);
-        if (joint.size()==size){
-            List<String> jointCopy = new ArrayList<>(joint); // 创建joint的副本
-            joint.clear();
-            list.add(jointCopy);
         }
     }
 
+
+    @Autowired
+    private Environment environment;
+    @Test
+    void mm(){
+        System.out.println(environment.getProperty("zhenduan.eposide_id"));
+    }
 }

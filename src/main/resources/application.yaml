@@ -5,7 +5,7 @@ spring:
     mongodb:
       host: 192.168.157.11
       database: ns-saas
-      port: 27018
+      port: 27017
       username: ns-admin
       password: 2b8ba2ded188
       authentication-database: admin
@@ -104,9 +104,9 @@ jiesuan:
   #出院科室名称
   out_dept_name: 32
   #主治医生代码
-  doctorcode: 33
+  doctor_code: 33
   #主治医生
-  doctorname: 34
+  doctor_name: 34
   #离院方式
   discharge_kind: 35
   #异地就诊标志

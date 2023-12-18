@@ -4,12 +4,6 @@ import com.example.service.ImportService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.*;
-import java.util.*;
-
-import static com.mongodb.WriteConcern.ACKNOWLEDGED;
-import static java.lang.Math.floor;
-
 @RequestMapping("import")
 @RestController
 public class ImportController {
@@ -18,17 +12,24 @@ public class ImportController {
     private ImportService importService;
 
     /**
-     * 原始三张表
+     * csv导入原始三张表
      *
-     * @param collectionName 在mongodb中的表全称 例：com.ns.entity.object.form.instance.ns3g475kl6jj2eb4ixfi.yibaozhenduanxinxi_1
-     * @param filepath       csv文件路径
+     * @param collectionName
+     * @param filepath
+     * @param target
+     * @param theadNum
+     * @param size
+     * @return
      */
-    @GetMapping("zhenduan")
-    public String zhenduan(@RequestParam(required = true, defaultValue = "") String collectionName,
-                                 @RequestParam(required = true, defaultValue = "") String filepath,
-                                 @RequestParam(required = true, defaultValue = "") int theadNum,
-                                 @RequestParam(required = true, defaultValue = "") int size) {
-        return importService.importsDataOpt(collectionName, filepath,size,theadNum);
+    @GetMapping("csv")
+    public String csvImport(@RequestParam(required = true, defaultValue = "") String collectionName,
+                            @RequestParam(required = true, defaultValue = "") String filepath,
+                            @RequestParam(required = true, defaultValue = "") String target,
+                            @RequestParam(required = true, defaultValue = "") int theadNum,
+                            @RequestParam(required = true, defaultValue = "") int zoneMin,
+                            @RequestParam(required = true, defaultValue = "") int zoneMax,
+                            @RequestParam(required = true, defaultValue = "") int size) {
+        return importService.importsDataOpt(collectionName, filepath, target,zoneMin,zoneMax, size, theadNum);
     }
 
     @GetMapping("gapdatagovern")
@@ -46,5 +47,14 @@ public class ImportController {
     ) {
         return importService.statisticsControl(target, collectionName, theadnum);
     }
+
+
+    @GetMapping("yibaomingxi")
+    private String WideTable(@RequestParam(required = true, defaultValue = "") String collectionName,
+                             @RequestParam(required = true, defaultValue = "") int theadNum,
+                             @RequestParam(required = true, defaultValue = "") int dataSize){
+        return importService.wideControl(collectionName,theadNum,dataSize);
+    }
+
 }
 
