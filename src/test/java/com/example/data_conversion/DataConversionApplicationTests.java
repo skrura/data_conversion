@@ -145,7 +145,6 @@ class DataConversionApplicationTests {
     @Test
     void zhneduanxinx_menzhen() {
         List<Map> menzhenzhubiao = new ArrayList<>();
-
         String menzhenzhubiaoku = "com.ns.entity.object.form.instance.nsjgpv79iu55j528ig78.xiaoganshidiyirenminyiyuanmenzhenzhudan_1";
         String zhenduanxinxiku = "com.ns.entity.object.form.instance.nsjgpv79iu55j528ig78.zhenduanxinxi_2";
         String empty = "";

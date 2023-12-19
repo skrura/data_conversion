@@ -32,22 +32,6 @@ public class ImportController {
         return importService.importsDataOpt(collectionName, filepath, target,zoneMin,zoneMax, size, theadNum);
     }
 
-    @GetMapping("gapdatagovern")
-    private String GapDataGovernance(@RequestParam(required = true, defaultValue = "") String target,
-                                     @RequestParam(required = true, defaultValue = "") String collectionName,
-                                     @RequestParam(required = true, defaultValue = "") int theadnum
-    ) {
-        return importService.gapControl(target, collectionName, theadnum);
-    }
-
-    @GetMapping("datagovern")
-    private String ZDataGovernance(@RequestParam(required = true, defaultValue = "") String target,
-                                   @RequestParam(required = true, defaultValue = "") String collectionName,
-                                   @RequestParam(required = true, defaultValue = "") int theadnum
-    ) {
-        return importService.statisticsControl(target, collectionName, theadnum);
-    }
-
 
     @GetMapping("yibaomingxi")
     private String WideTable(@RequestParam(required = true, defaultValue = "") String collectionName,
@@ -55,6 +39,7 @@ public class ImportController {
                              @RequestParam(required = true, defaultValue = "") int dataSize){
         return importService.wideControl(collectionName,theadNum,dataSize);
     }
+
 
 }
 

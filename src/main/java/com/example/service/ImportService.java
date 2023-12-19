@@ -10,13 +10,11 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.InsertManyOptions;
 import com.opencsv.CSVReader;
-import com.opencsv.exceptions.CsvMalformedLineException;
 import com.opencsv.exceptions.CsvValidationException;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.aggregation.AggregationResults;
@@ -57,6 +55,13 @@ public class ImportService {
      * 原始三张表
      *
      * @param collectionName
+     * @param filepath
+     * @param target
+     * @param zoneMin
+     * @param zoneMax
+     * @param size
+     * @param theadNum
+     * @return
      */
     public String importsDataOpt(String collectionName, String filepath, String target, int zoneMin, int zoneMax, int size, int theadNum) {
         filepath = "D:\\桌面\\第一人民门诊明细.csv";
@@ -84,6 +89,14 @@ public class ImportService {
         return target + ":" + "complete";
     }
 
+    /**
+     * 大宽表控制中心
+     *
+     * @param collectionName
+     * @param theadNum
+     * @param dataSize
+     * @return
+     */
     public String wideControl(String collectionName, int theadNum, int dataSize) {
         int theadDataNum = (int) (Math.ceil((double) dataSize / theadNum));
         CountDownLatch latch = new CountDownLatch(theadNum);
@@ -91,12 +104,9 @@ public class ImportService {
         ExecutorService executor = Executors.newFixedThreadPool(theadNum);
         for (int i = 0; i < theadNum; i++) {
             int finalI = i;
-            executor.execute(new Runnable() {
-                @Override
-                public void run() {
-                    wideImport(finalI * theadDataNum, theadDataNum,collectionName);
-                    latch.countDown();
-                }
+            executor.execute(() -> {
+                wideImport(finalI * theadDataNum, theadDataNum, collectionName);
+                latch.countDown();
             });
         }
         while (!executor.isTerminated()) {
@@ -106,57 +116,18 @@ public class ImportService {
         return "Wide Complete";
     }
 
+
     /**
-     * 间隔控制中心
+     * 导入大宽表
      *
-     * @param target
+     * @param skip
+     * @param theadDataNum
      * @param collectionName
-     * @param theadnum
-     * @return
      */
-    public String gapControl(String target, String collectionName, int theadnum) {
-        String jiesuan = "";
-        String zhenduan = "";
-        String mingxi = "";
-        Criteria criteria = new Criteria();
-        switch (target) {
-            case "zhuyuanjiange":
-                Criteria criteria0 = Criteria.where("benefit_type").in("本地职工", "本地居保", "省内异地", "省外异地");
-                Criteria criteria1 = Criteria.where("medical_mode").is("住院");
-                criteria = new Criteria().andOperator(criteria0, criteria1);
-                break;
-            case "menzhenjiange":
-                Criteria criteria2 = Criteria.where("benefit_type").in("本地职工", "本地居保", "省内异地", "省外异地");
-                Criteria criteria3 = Criteria.where("medical_mode").in("普通门诊", "门慢", "门特", "药店购药");
-                criteria = new Criteria().andOperator(criteria2, criteria3);
-        }
-
-        for (int i = 0; i < theadnum; i++) {
-            gapImport(criteria, target, jiesuan, zhenduan, mingxi, collectionName, i, theadData);
-        }
-        return "ok";
-    }
-
-    public String statisticsControl(String target, String collectionName, int theadnum) {
-        String jiesuan = "";
-        String zhenduan = "";
-        String mingxi = "";
-        Criteria criteria = new Criteria();
-        switch (target) {
-            case "zhenliaotongji":
-                criteria = Criteria.where("benefit_type").in("本地职工", "本地居保", "省内异地", "省外异地");
-                break;
-        }
-        for (int i = 0; i < theadnum; i++) {
-            statisticsImport(criteria, target, jiesuan, zhenduan, mingxi, collectionName, i, theadData);
-        }
-        return "ok";
-    }
-
-    private void wideImport(int skip, int theadDataNum,String collectionName) {
-        String mingxi = "";
-        String zhenduan = "";
-        String jiesuan = "";
+    private void wideImport(int skip, int theadDataNum, String collectionName) {
+        String mingxi = environment.getProperty("mingxiku");
+        String zhenduan = environment.getProperty("zhenduanku");
+        String jiesuan = environment.getProperty("jiesuanku");
         // 初始条件（大前提）
         Criteria criteria = Criteria.where("benefit_type").in("本地职工", "本地居保", "省内异地", "省外异地");
         //根据单据明细号分组
@@ -181,26 +152,33 @@ public class ImportService {
         try (MongoClient mongoClient = MongoClients.create(settings)) {
             MongoDatabase database = mongoClient.getDatabase(dbName);
             MongoCollection<Document> collection = database.getCollection(collectionName);
+            List<Document> batchDocuments = new ArrayList<>();
 
             for (Map map : mapList) {
+                // 构建本地查询
+                MongoTemplate mongoTemplatew = new MongoTemplate(MongoClients.create(settings), dbName);
                 // 构建单据明细号查询条件
                 Criteria criteria1 = Criteria.where("bill_detail_id").is(map.get("_id"));
                 // 合并初始条件
                 // 根据单据明细号查询明细表
-                Map mingxiMap = mongoTemplate.findOne(Query.query(new Criteria().andOperator(criteria1, criteria)), Map.class, mingxi);
+                Map mingxiMap = mongoTemplatew.findOne(Query.query(new Criteria().andOperator(criteria, criteria1)), Map.class, mingxi);
                 // 构建单据号查询条件
                 Criteria criteria2 = Criteria.where("bill_id").is(mingxiMap.get("bill_id"));
                 // 合并初始条件
                 // 根据单据号查询结算表
-                Map jiesuanMap = mongoTemplate.findOne(Query.query(new Criteria().andOperator(criteria, criteria2)), Map.class, zhenduan);
+                Map jiesuanMap = mongoTemplatew.findOne(Query.query(new Criteria().andOperator(criteria, criteria2)), Map.class, jiesuan);
                 // 构建就诊号查询条件
                 Criteria criteria3 = Criteria.where("eposide_id").is(mingxiMap.get("eposide_id"));
                 // 合并初始条件
                 // 根据就诊号查询诊断表
-                Map zhenduanMap = mongoTemplate.findOne(Query.query(new Criteria().andOperator(criteria, criteria3)), Map.class, zhenduan);
+                Map zhenduanMap = mongoTemplatew.findOne(Query.query(new Criteria().andOperator(criteria, criteria3)), Map.class, zhenduan);
                 // 单条数据
                 Document doc = new Document();
-                //系统字段
+                // 主要明细为空
+                if (mingxiMap.isEmpty()) {
+                    continue;
+                }
+                // 系统字段
                 String mainId = UUID.randomUUID().toString();
                 doc.put("_id", mainId);
                 doc.put("create_time", System.currentTimeMillis());
@@ -213,522 +191,217 @@ public class ImportService {
                 doc.put("corp_id", "nsrcu88p7uy22m7i9ioz");
                 doc.put("parent_corp_id_list", new ArrayList<>());
                 doc.put("bind_category_id", "");
-                //业务字段
-                // 统筹区名称
-                doc.put("area_name",jiesuanMap.get("area_name"));
-                //参保人统筹区名称
-                doc.put("area_name_person",jiesuanMap.get("area_name_person"));
-                //医保年度
-                doc.put("year",jiesuanMap.get("year"));
+                // 业务字段
+                if (jiesuanMap != null) {
+                    // 统筹区名称
+                    doc.put("area_name", jiesuanMap.get("area_name"));
+                    //参保人统筹区名称
+                    doc.put("area_name_person", jiesuanMap.get("area_name_person"));
+                    //医保年度
+                    doc.put("year", jiesuanMap.get("year"));
+                    //出生日期
+                    doc.put("birthday", jiesuanMap.get("birthday"));
+                    //年龄
+                    doc.put("age", jiesuanMap.get("age"));
+                    //性别
+                    doc.put("sex", jiesuanMap.get("sex"));
+                    //单位名称
+                    doc.put("company_name", jiesuanMap.get("company_name"));
+                    //医疗费总额
+                    doc.put("money_total", jiesuanMap.get("money_total"));
+                    //统筹支付金额
+                    doc.put("money_bmi", jiesuanMap.get("money_medical"));
+                    //入院日期
+                    doc.put("in_date", jiesuanMap.get("in_date"));
+                    //出院日期
+                    doc.put("out_date", jiesuanMap.get("out_date"));
+                    //住院天数
+                    doc.put("hospital_num", jiesuanMap.get("hospital_num"));
+                    //入院诊断疾病编码
+                    doc.put("in_diagnose_code", jiesuanMap.get("in_diagnose_code"));
+                    //入院疾病名称
+                    doc.put("in_diagnose_name", jiesuanMap.get("in_diagnose_name"));
+                    //出院疾病诊断编码
+                    doc.put("out_diagnose_code", jiesuanMap.get("out_diagnose_code"));
+                    //出院疾病名称
+                    doc.put("out_diagnose_name", jiesuanMap.get("out_diagnose_name"));
+                    //离院方式
+                    doc.put("discharge_kind", jiesuanMap.get("discharge_kind"));
+                    //医院类别
+                    doc.put("medical_type", jiesuanMap.get("medical_type"));
+                    //医院等级
+                    doc.put("medical_grade", jiesuanMap.get("medical_grade"));
+                    //医院性质
+                    doc.put("medical_nature", jiesuanMap.get("medical_nature"));
+                }
+                if (zhenduanMap != null) {
+                    if (zhenduanMap.get("main_flag") != null) {
+                        if (zhenduanMap.get("main_flag").equals("1")) {
+                            //主诊疾病名称
+                            doc.put("main_diag_name", zhenduanMap.get("diag_name"));
+                            //主诊疾病代码
+                            doc.put("main_diag_name_code", zhenduanMap.get("diag_code"));
+                        } else {
+                            //次诊疾病名称
+                            doc.put("secondary_diag_name", zhenduanMap.get("diag_name"));
+                            //次诊疾病代码
+                            doc.put("secondary_diag_name_code", zhenduanMap.get("diag_code"));
+                        }
+                    }
+                }
                 //定点机构编码
-                doc.put("medical_code",mingxiMap.get("medical_code"));
+                doc.put("medical_code", mingxiMap.get("medical_code"));
                 //定点机构名称
-                doc.put("medical_name",mingxiMap.get("medical_name"));
+                doc.put("medical_name", mingxiMap.get("medical_name"));
                 //社会保障卡号
-                doc.put("social_card",mingxiMap.get("social_card"));
+                doc.put("social_card", mingxiMap.get("social_card"));
                 //证件号码
-                doc.put("card_id",mingxiMap.get("card_id"));
+                doc.put("card_id", mingxiMap.get("card_id"));
                 //姓名
-                doc.put("patient_name",mingxiMap.get("patient_name"));
+                doc.put("patient_name", mingxiMap.get("patient_name"));
                 //险种类型
-                doc.put("benefit_type",mingxiMap.get("benefit_type"));
+                doc.put("benefit_type", mingxiMap.get("benefit_type"));
                 //医疗类别
-                doc.put("medical_mode",mingxiMap.get("medical_mode"));
+                doc.put("medical_mode", mingxiMap.get("medical_mode"));
                 //就诊号
-                doc.put("eposide_id",mingxiMap.get("eposide_id"));
+                doc.put("eposide_id", mingxiMap.get("eposide_id"));
                 //单据号
-                doc.put("bill_id",mingxiMap.get("bill_id"));
+                doc.put("bill_id", mingxiMap.get("bill_id"));
                 //单据明细号
-                doc.put("bill_detail_id",mingxiMap.get("bill_detail_id"));
+                doc.put("bill_detail_id", mingxiMap.get("bill_detail_id"));
                 //门诊或住院号
-                doc.put("hospital_id",mingxiMap.get("hospital_id"));
+                doc.put("hospital_id", mingxiMap.get("hospital_id"));
                 //费用发生时间
-                doc.put("cost_time",mingxiMap.get("cost_time"));
+                doc.put("cost_time", mingxiMap.get("cost_time"));
                 //费用结算时间
-                doc.put("clear_time",mingxiMap.get("clear_time"));
+                doc.put("clear_time", mingxiMap.get("clear_time"));
                 //医保目录编码
-                doc.put("item_code",mingxiMap.get("clear_time"));
+                doc.put("item_code", mingxiMap.get("clear_time"));
                 //医保目录名称
-                doc.put("item_name",mingxiMap.get("item_name"));
+                doc.put("item_name", mingxiMap.get("item_name"));
                 //机构收费项目编码
-                doc.put("item_code_hosp",mingxiMap.get("item_code_hosp"));
+                doc.put("item_code_hosp", mingxiMap.get("item_code_hosp"));
                 //机构收费项目名称
-                doc.put("item_name_hosp",mingxiMap.get("item_name_hosp"));
+                doc.put("item_name_hosp", mingxiMap.get("item_name_hosp"));
                 //收费项目类别
-                doc.put("charge_type",mingxiMap.get("charge_type"));
+                doc.put("charge_type", mingxiMap.get("charge_type"));
                 //费用类别
-                doc.put("cost_type",mingxiMap.get("cost_type"));
+                doc.put("cost_type", mingxiMap.get("cost_type"));
                 //单价
-                doc.put("unit_price",mingxiMap.get("unit_price"));
+                doc.put("unit_price", mingxiMap.get("unit_price"));
                 //限价
-                doc.put("max_price",mingxiMap.get("max_price"));
+                doc.put("max_price", mingxiMap.get("max_price"));
                 //帖数
-                doc.put("dose",mingxiMap.get("dose"));
+                doc.put("dose", mingxiMap.get("dose"));
                 //数量
-                doc.put("num",mingxiMap.get("num"));
+                doc.put("num", mingxiMap.get("num"));
                 //金额
-                doc.put("money",mingxiMap.get("money"));
+                doc.put("money", mingxiMap.get("money"));
                 //自付比例
-                doc.put("pay_per_retio",mingxiMap.get("pay_per_retio"));
+                doc.put("pay_per_retio", mingxiMap.get("pay_per_retio"));
                 //医保范围费用
-                doc.put("money_medical", );
+                doc.put("money_medical", mingxiMap.get("money_medical"));
                 //自理费用
-                doc.put("money_self_pay", );
+                doc.put("money_self_pay", mingxiMap.get("money_self_pay"));
                 //自费费用
-                doc.put("money_self_out", );
+                doc.put("money_self_out", mingxiMap.get("money_self_out"));
                 //剂型
-                doc.put("dosage_form", );
+                doc.put("dosage_form", mingxiMap.get("dosage_form"));
                 //规格
-                doc.put("spec", );
+                doc.put("spec", mingxiMap.get("spec"));
                 //药品剂型单位
-                doc.put("pack_unit", );
+                doc.put("pack_unit", mingxiMap.get("pack_unit"));
                 //生产企业
-                doc.put("bus_produce", );
+                doc.put("bus_produce", mingxiMap.get("bus_produce"));
                 //药品包装转化比
-                doc.put("pack_retio", );
+                doc.put("pack_retio", mingxiMap.get("pack_retio"));
                 //特殊病种标识
-                doc.put("is_special", );
+                doc.put("is_special", mingxiMap.get("is_special"));
                 //是否处方药
-                doc.put("is_recipel", );
+                doc.put("is_recipel", mingxiMap.get("is_recipel"));
                 //单复方标志
-                doc.put("is_single", );
+                doc.put("is_single", mingxiMap.get("is_single"));
                 //处方号
-                doc.put("recipel_no", );
+                doc.put("recipel_no", mingxiMap.get("recipel_no"));
                 //科室名称
-                doc.put("dept_name", );
+                doc.put("dept_name", mingxiMap.get("dept_name"));
                 //执行科室名称
-                doc.put("discharge_dept_name", );
+                doc.put("discharge_dept_name", mingxiMap.get("discharge_dept_name"));
                 //医生编码
-                doc.put("doctor_code", );
+                doc.put("doctor_code", mingxiMap.get("doctor_code"));
                 //医生姓名
-                doc.put("doctor_name", );
-                //出生日期
-                doc.put("birthday", );
-                //年龄
-                doc.put("age", );
-                //性别
-                doc.put("sex", );
-                //单位名称
-                doc.put("company_name", );
+                doc.put("doctor_name", mingxiMap.get("doctor_name"));
                 //患者住址
-                doc.put("address", );
+                doc.put("address", "");
                 //病案首页号
-                doc.put("medical_record_id", );
-                //医疗费总额
-                doc.put("money_total", );
+                doc.put("medical_record_id", "");
                 //个人账户支付
-                doc.put("money_self_account", );
+                doc.put("money_self_account", "");
                 //个人现金支付
-                doc.put("money_self_cash", );
-                //统筹支付金额
-                doc.put("money_bmi", );
+                doc.put("money_self_cash", "");
                 //大病支付
-                doc.put("money_serious", );
+                doc.put("money_serious", "");
                 //公务员补助
-                doc.put("money_subsidy_functionary", );
+                doc.put("money_subsidy_functionary", "");
                 //民政基金
-                doc.put("money_civil_administration", );
+                doc.put("money_civil_administration", "");
                 //残联基金
-                doc.put("money_federation_disabled", );
+                doc.put("money_federation_disabled", "");
                 //其他补助
-                doc.put("money_subsidy_other", );
+                doc.put("money_subsidy_other", "");
                 //家庭共济账户支付
-                doc.put("money_family", );
-                //当年帐户支付额
-                doc.put("money_present", );
-                //历年帐户支付额
-                doc.put("money_previous", );
+                doc.put("money_family", "");
+                //当年账户支付额
+                doc.put("money_present", "");
+                //历年账户支付额
+                doc.put("money_previous", "");
                 //个人自负
-                doc.put("money_self_in", );
-                //结算前当年帐户余额
-                doc.put("money_this_before", );
-                //结算前历年帐户余额
-                doc.put("money_previous_before", );
+                doc.put("money_self_in", "");
+                //结算前当年账户余额
+                doc.put("money_this_before", "");
+                //结算前历年账户余额
+                doc.put("money_previous_before", "");
                 //结算状态
-                doc.put("clear_status", );
+                doc.put("clear_status", "");
                 //结算方式
-                doc.put("clear_kind", );
+                doc.put("clear_kind", "");
                 //医保付费方式
-                doc.put("pay_way", );
+                doc.put("pay_way", "");
                 //医疗费用支付方式
-                doc.put("pay_kind", );
+                doc.put("pay_kind", "");
                 //床位号
-                doc.put("bed_no", );
-                //入院日期
-                doc.put("in_date", );
-                //出院日期
-                doc.put("out_date", );
-                //住院天数
-                doc.put("hospital_num", );
-                //入院诊断疾病编码
-                doc.put("in_diagnose_code", );
-                //入院疾病名称
-                doc.put("in_diagnose_name", );
-                //出院疾病诊断编码
-                doc.put("out_diagnose_code", );
-                //出院疾病名称
-                doc.put("out_diagnose_name", );
-                //离院方式
-                doc.put("discharge_kind", );
+                doc.put("bed_no", "");
                 //冲销单据号
-                doc.put("refund_bill_id", );
-                //主诊疾病名称
-                doc.put("main_diag_name", );
-                //主诊疾病代码
-                doc.put("main_diag_name_code", );
-                //次诊疾病名称
-                doc.put("secondary_diag_name", );
-                //次诊疾病代码
-                doc.put("secondary_diag_name_code", );
-                //医院类别
-                doc.put("medical_type", );
-                //医院等级
-                doc.put("medical_grade", );
-                //医院性质
-                doc.put("medical_nature", );
+                doc.put("refund_bill_id", "");
 
 
+                batchDocuments.add(doc);
+                if (batchDocuments.size() >= Integer.parseInt(environment.getProperty("putIn"))) {
+                    collection.insertMany(batchDocuments, options);
+                    batchDocuments.clear();
+                }
+            }
+            if (batchDocuments.size() > 0) {
+                collection.insertMany(batchDocuments, options);
+                batchDocuments.clear();
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private void statisticsImport(Criteria criteria, String target, String jiesuan, String zhenduan, String mingxi, String collectionName, int theadId, int limit) {
-        List<Map> mapList = new ArrayList<>();
-        List<Map> charge = new ArrayList<>();
-        switch (target) {
-            case "zhenliaotongji":
-                mapList = zStatisticsBuildingQuery(criteria, jiesuan, zhenduan, mingxi, theadId * theadData, limit).getMappedResults();
-        }
-
-    }
 
     /**
-     * 住院与门诊间隔数据入库
+     * 大宽表构建查询条件
      *
      * @param criteria
-     * @param jiesuan
+     * @param mingxi
      * @param zhenduan
-     * @param collectionName
-     * @param theadId
+     * @param jiesuan
+     * @param skip
      * @param limit
-     */
-    private void gapImport(Criteria criteria, String target, String jiesuan, String zhenduan, String mingxi, String collectionName, int theadId, int limit) {
-        List<Map> mapList = new ArrayList<>();
-        switch (target) {
-            case "zhuyuanjiange":
-                mapList = gapStayBuildingQuery(criteria, jiesuan, zhenduan, theadId * theadData, limit).getMappedResults();
-                break;
-            case "menzhenjiange":
-                mapList = outpatientGapBuildingQuery(criteria, mingxi, zhenduan, jiesuan, theadId * theadData, limit).getMappedResults();
-                break;
-        }
-        Map<String, List<Map>> gapMap = new HashMap<>();
-        for (Map map : mapList) {
-            String fieldValue = map.get("social_card").toString();
-            if (gapMap.get(fieldValue) == null) {
-                gapMap.put(fieldValue, new ArrayList<>());
-            }
-            gapMap.get(fieldValue).add(map);
-        }
-
-        String connectionString = "mongodb://" + this.host + ":" + this.port;
-        // 构建 MongoClientSettings
-        MongoClientSettings settings;
-        settings = MongoClientSettings.builder()
-                .applyConnectionString(new ConnectionString(connectionString))
-                .writeConcern(ACKNOWLEDGED)
-                .build();
-
-        InsertManyOptions options = new InsertManyOptions()
-                .bypassDocumentValidation(false)
-                .ordered(false);
-
-
-        //开启MongoDB
-        String dbName = "ns-saas";
-        try (MongoClient mongoClient = MongoClients.create(settings)) {
-            MongoDatabase database = mongoClient.getDatabase(dbName);
-            MongoCollection<Document> collection = database.getCollection(collectionName);
-
-            int i = 1;
-            Double gap = 0.0;
-            Long skip = (long) (theadId * theadData);
-            List<Document> batchDocuments = new ArrayList<>();
-            for (Map.Entry<String, List<Map>> entry : gapMap.entrySet()) {
-                List<Map> traversal = entry.getValue();
-                for (int t = 1; i < traversal.size(); i++) {
-                    Document doc = new Document();
-                    //系统字段
-                    String mainId = UUID.randomUUID().toString();
-                    doc.put("_id", mainId);
-                    doc.put("create_time", System.currentTimeMillis());
-                    doc.put("create_account", "admin");
-                    doc.put("category_id", "ed8eb695-2604-453e-a767-99fca467a898");
-                    doc.put("data_status", "已归档");
-                    doc.put("data_type", 1);
-                    doc.put("priority", "");
-                    doc.put("bind_id", mainId);
-                    doc.put("corp_id", "nsrcu88p7uy22m7i9ioz");
-                    doc.put("parent_corp_id_list", new ArrayList<>());
-                    doc.put("bind_category_id", "");
-                    switch (target) {
-                        case "zhuyuanjiange":
-                            //住院业务字段
-                            doc = stayGapBusinessField(traversal.get(t), doc, t);
-                            //住院计算字段    住院间隔天数
-                            Long inDate = (Long) traversal.get(t).get("in_date");
-                            Long outDate = (Long) traversal.get(t - 1).get("out_date");
-                            Long time = inDate - outDate;
-                            Double day = time / (1000 * 60 * 60 * 24.0);
-                            Map daymap = pack("天", day);
-                            doc.put("interval_day", daymap);
-                            break;
-                        case "menzhenjiange":
-                            //门诊计算字段
-                            // 门诊间隔天数
-                            Long lastDate = (Long) traversal.get(t - 1).get("cost_time");
-                            Long nextDate = (Long) traversal.get(t).get("cost_time");
-                            gap += (nextDate - lastDate) / (1000 * 60 * 60 * 24.0);
-                            if (gap > 1.00) {
-                                gap = 0.0;
-                                //业务字段非异天间隔跳过
-                                doc = outpatientGapBusinessField(traversal.get(t), doc, t);
-                                doc.put("interval_day", pack("天", gap));
-                                //        年就诊次数
-                                doc.put("eposide_number", traversal.size());
-                                //计算字段
-                                Set<String> drugKind = new HashSet<>();
-                                Set<String> Hospital = new HashSet<>();
-                                int drugMoney = 0;
-                                for (Map map : traversal) {
-                                    drugKind.add((String) map.get("item_code"));
-                                    Hospital.add((String) map.get("medical_name"));
-                                    if (map.get("charge_type").toString().contains("药")) {
-                                        drugMoney += Integer.parseInt(map.get("money").toString());
-                                    }
-                                }
-                                //        药品种类数量
-                                doc.put("drug_number", pack("种", drugKind.size()));
-                                //        药品总金额
-                                doc.put("drug_money", pack("元", drugMoney));
-                                //        医院数量
-                                doc.put("hospital_number", pack("个", Hospital.size()));
-                            }
-                            break;
-                    }
-                    doc.put("zone", i + skip);
-                    i++;
-                    batchDocuments.add(doc);
-                    if (batchDocuments.size() >= 5000) {
-                        collection.insertMany(batchDocuments, options);
-                        batchDocuments.clear();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-
-    }
-
-    /**
-     * 住院间隔业务字段
-     *
-     * @param map
-     * @param doc
-     * @param t
      * @return
      */
-    private Document stayGapBusinessField(Map map, Document doc, int t) {
-        ArrayList diagDept = new ArrayList<>();
-        ArrayList mainFlag = new ArrayList<>();
-        ArrayList diagName = new ArrayList<>();
-        if (map.get("diag_dept") != null)
-            diagDept = (ArrayList) map.get("diag_dept");
-        if (map.get("main_flag") != null)
-            mainFlag = (ArrayList) map.get("main_flag");
-        if (map.get("diag_name") != null)
-            diagName = (ArrayList) map.get("diag_name");
-//            患者证件号码
-        doc.put("card_id", map.get("card_id"));
-//            患者社会保障卡号
-        doc.put("social_card", map.get("social_card"));
-//            患者年龄
-        Map<String, Object> age = pack("岁", map.get("age"));
-        doc.put("age", age);
-//            患者姓名
-        doc.put("patient_name", map.get("patient_name"));
-//            患者性别
-        doc.put("sex", map.get("sex"));
-//            患者出生日期
-        doc.put("birthday", map.get("birthday"));
-//            患者工作单位
-        doc.put("company_name", map.get("company_name"));
-//            参保人统筹区名称
-        doc.put("area_name_person", map.get("area_name_person"));
-//            险种类型
-        doc.put("benefit_type", map.get("benefit_type"));
-//            医疗类别
-        doc.put("medical_mode", map.get("medical_mode"));
-//            医院名称
-        doc.put("medical_name", map.get("medical_name"));
-//            医院类别
-        doc.put("medical_type", map.get("medical_type"));
-//            医院等级
-        doc.put("medical_grade", map.get("medical_grade"));
-//            医院性质
-        doc.put("medical_nature", map.get("medical_nature"));
-//            科室名称
-        doc.put("diag_dept", map.get("in_date"));
-//            执行科室名称
-        if (diagDept.size() > t) {
-            doc.put("discharge_dept_name", diagDept.get(t));
-        } else {
-            doc.put("discharge_dept_name", diagDept.get(0));
-        }
-        //            主诊疾病名称
-        if (mainFlag.size() > t) {
-            if (mainFlag.get(t).equals("1")) {
-                if (diagName.size() > t) {
-                    doc.put("diag_name", diagName.get(t));
-                } else {
-                    doc.put("diag_name", diagName.get(0));
-                }
-            } else {
-                doc.put("diag_name", "");
-            }
-        }
-//            总金额
-        Map<String, Object> total = pack("元", map.get(""));
-        doc.put("money_total", total);
-//            医保范围费用
-        Map<String, Object> health = pack("元", map.get(""));
-        doc.put("money_medical", health);
-
-        return doc;
-    }
-
-    /**
-     * 门诊间隔业务字段
-     *
-     * @param map
-     * @param doc
-     * @param t
-     * @return
-     */
-    private Document outpatientGapBusinessField(Map map, Document doc, int t) {
-        //随t变化
-        ArrayList diagDept = new ArrayList<>();
-        ArrayList mainFlag = new ArrayList<>();
-        ArrayList diagName = new ArrayList<>();
-        ArrayList medicalType = new ArrayList<>();
-        ArrayList medicalGrade = new ArrayList<>();
-        ArrayList medicalNature = new ArrayList<>();
-        if (map.get("diag_dept") != null)
-            diagDept = (ArrayList) map.get("diag_dept");
-        if (map.get("main_flag") != null)
-            mainFlag = (ArrayList) map.get("main_flag");
-        if (map.get("diag_name") != null)
-            diagName = (ArrayList) map.get("diag_name");
-        if (map.get("medical_type") != null)
-            medicalType = (ArrayList) map.get("medical_type");
-        if (map.get("medical_grade") != null)
-            medicalGrade = (ArrayList) map.get("medical_grade");
-        if (map.get("medical_nature") != null)
-            medicalNature = (ArrayList) map.get("medical_nature");
-        //不随t变化
-        ArrayList birthday = new ArrayList<>();
-        ArrayList age = new ArrayList<>();
-        ArrayList sex = new ArrayList<>();
-        ArrayList companyName = new ArrayList<>();
-        ArrayList areaNamePerson = new ArrayList<>();
-        if (map.get("birthday") != null)
-            birthday = (ArrayList) map.get("birthday");
-        if (map.get("age") != null)
-            age = (ArrayList) map.get("age");
-        if (map.get("sex") != null)
-            sex = (ArrayList) map.get("sex");
-        if (map.get("company_name") != null)
-            companyName = (ArrayList) map.get("company_name");
-        if (map.get("area_name_person") != null)
-            areaNamePerson = (ArrayList) map.get("area_name_person");
-
-//        患者证件号码
-        doc.put("card_id", map.get("card_id"));
-//        患者社会保障卡号
-        doc.put("social_card", map.get("social_card"));
-//        患者年龄
-        if (!age.isEmpty()) {
-            Map<String, Object> aGe = pack("岁", age.get(0));
-            doc.put("age", aGe);
-        }
-//        患者姓名
-        doc.put("patient_name", map.get("patient_name"));
-//        患者性别
-        if (!sex.isEmpty()) {
-            doc.put("sex", sex.get(0));
-        }
-//        患者出生日期
-        if (!birthday.isEmpty()) {
-            doc.put("birthday", birthday.get(0));
-        }
-//        患者工作单位
-        if (!companyName.isEmpty()) {
-            doc.put("company_name", companyName.get(0));
-        }
-//        患者住址
-        doc.put("address", "");
-//        参保人统筹区名称
-        if (!areaNamePerson.isEmpty())
-            doc.put("area_name_person", areaNamePerson.get(0));
-//        险种类型
-        doc.put("benefit_type", map.get("benefit_type"));
-//        医疗类别
-        doc.put("medical_mode", map.get("medical_mode"));
-//        医院名称
-        doc.put("medical_name", map.get("medical_name"));
-//        医院类别
-        if (!medicalType.isEmpty()) {
-            if (medicalType.size() > t) {
-                doc.put("medical_type", medicalType.get(t));
-            } else {
-                doc.put("medical_type", medicalType.get(0));
-            }
-        }
-//        医院等级
-        if (!medicalGrade.isEmpty()) {
-            if (medicalGrade.size() > t) {
-                doc.put("medical_grade", medicalGrade.get(t));
-            } else {
-                doc.put("medical_grade", medicalGrade.get(0));
-            }
-        }
-//        医院性质
-        if (!medicalNature.isEmpty()) {
-            if (medicalNature.size() > t) {
-                doc.put("medical_nature", medicalNature.get(t));
-            } else {
-                doc.put("medical_nature", medicalNature.get(0));
-            }
-        }
-//        科室名称
-        doc.put("diag_dept", map.get("dept_name"));
-//        执行科室名称
-        doc.put("discharge_dept_name", map.get(""));
-//        主诊疾病名称
-        doc.put("diag_name", map.get("discharge_dept_name"));
-//        总金额
-        doc.put("money_total", map.get("money"));
-//        医保范围费用
-        doc.put("money_medical", map.get("money_medical"));
-
-
-        return doc;
-    }
-
 
     private AggregationResults<Map> wideBuildingQuery(Criteria criteria, String mingxi, String zhenduan, String jiesuan, int skip, int limit) {
         TypedAggregation<Map> TypedAggregation = Aggregation.newAggregation(
@@ -746,106 +419,6 @@ public class ImportService {
         return aggregationResults;
     }
 
-    /**
-     * @param criteria
-     * @param mingxi
-     * @param zhenduan
-     * @param jiesuan
-     * @param skip
-     * @param limit
-     * @return
-     */
-    private AggregationResults<Map> zStatisticsBuildingQuery(Criteria criteria, String mingxi, String zhenduan, String jiesuan, int skip, int limit) {
-        TypedAggregation<Map> TypedAggregation = Aggregation.newAggregation(
-                Map.class,
-                Aggregation.limit(limit),
-                Aggregation.skip(skip),
-                Aggregation.sort(Sort.by(Sort.Order.asc("social_card"))).and(Sort.by(Sort.Order.asc("cost_time"))),
-                Aggregation.match(criteria),
-                Aggregation.group("social_card", "charge_type").count().as("count").sum("money").as("money")
-                        .first("medical_name").as("medical_name").first("card_id").as("card_id")
-                        .first("patient_name").as("patient_name").first("benefit_type").as("benefit_type")
-                        .first("medical_mode").as("medical_mode").first("eposide_id").as("eposide_id")
-                        .first("dept_name").as("dept_name").first("discharge_dept_name").as("discharge_dept_name")
-                        .first("doctor_code").as("doctor_code").first("doctor_name").as("doctor_name"),
-                Aggregation.lookup(zhenduan, "eposide_id", "eposide_id", "zhenduan"),
-                Aggregation.lookup(jiesuan, "social_card", "social_card", "jiesuan"),
-                Aggregation.project("medical_name", "card_id", "patient_name", "benefit_type", "medical_mode", "eposide_id", "dept_name",
-                        "discharge_dept_name", "doctor_code", "doctor_name", "zhenduan.main_flag", "zhenduan.diag_name",
-                        "jiesuan.area_name_person", "jiesuan.medical_type", "jiesuan.medical_grade", "jiesuan.medical_nature",
-                        "jiesuan.birthday", "jiesuan.age", "jiesuan.sex", "jiesuan.company_name", "jiesuan.money_total", "jiesuan.money_medical")
-        ).withOptions(Aggregation.newAggregationOptions().allowDiskUse(true).build());
-
-        AggregationResults<Map> aggregationResults0 = mongoTemplate.aggregate(
-                TypedAggregation,
-                mingxi,
-                Map.class);
-        return aggregationResults0;
-    }
-
-    /**
-     * 构建门诊间隔查询条件
-     *
-     * @param criteria
-     * @param mingxi
-     * @param zhenduan
-     * @param jiesuan
-     * @param skip
-     * @param limit
-     * @return
-     */
-    private AggregationResults<Map> outpatientGapBuildingQuery(Criteria criteria, String mingxi, String zhenduan, String jiesuan, int skip, int limit) {
-        TypedAggregation<Map> TypedAggregation = Aggregation.newAggregation(
-                Map.class,
-                Aggregation.limit(limit),
-                Aggregation.skip(skip),
-                Aggregation.sort(Sort.by(Sort.Order.asc("social_card"))).and(Sort.by(Sort.Order.asc("cost_time"))),
-                Aggregation.match(criteria),
-                Aggregation.lookup(zhenduan, "eposide_id", "eposide_id", "zhenduan"),
-                Aggregation.lookup(jiesuan, "social_card", "social_card", "jiesuan"),
-                Aggregation.project("area_person_code", "medical_name", "social_card", "card_id", "patient_name",
-                        "benefit_type", "medical_mode", "cost_time", "money", "money_medical", "dept_name", "item_code",
-                        "charge_type", "discharge_dept_name", "jiesuan.medical_type", "jiesuan.medical_grade", "jiesuan.medical_nature",
-                        "jiesuan.birthday", "jiesuan.age", "jiesuan.sex", "jiesuan.company_name", "jiesuan.area_name_person",
-                        "eposide_id", "zhenduan.main_flag", "zhenduan.diag_name", "zhenduan.diag_dept")
-        ).withOptions(Aggregation.newAggregationOptions().allowDiskUse(true).build());
-
-        AggregationResults<Map> aggregationResults0 = mongoTemplate.aggregate(
-                TypedAggregation,
-                mingxi,
-                Map.class);
-        return aggregationResults0;
-    }
-
-    /**
-     * 住院间隔构建查询条件
-     *
-     * @param criteria
-     * @param table
-     * @return
-     */
-    private AggregationResults<Map> gapStayBuildingQuery(Criteria criteria, String table, String table1, int skip, int limit) {
-        TypedAggregation<Map> TypedAggregation = Aggregation.newAggregation(
-                Map.class,
-                Aggregation.limit(limit),
-                Aggregation.skip(skip),
-                Aggregation.group("social_card"),
-                Aggregation.match(criteria),
-                Aggregation.lookup(table1, "eposide_id", "eposide_id", "zhenduan"),
-                Aggregation.project("area_name", "area_name_person", "medical_name",
-                        "medical_type", "medical_grade", "medical_nature", "card_id",
-                        "patient_name", "birthday", "age", "sex", "company_name",
-                        "benefit_type", "medical_mode", "money_total", "money_medical",
-                        "in_date", "out_date", "dept_name", "eposide_id", "zhenduan.main_flag",
-                        "zhenduan.diag_name", "zhenduan.diag_dept")
-        ).withOptions(Aggregation.newAggregationOptions().allowDiskUse(true).build());
-
-        AggregationResults<Map> aggregationResults0 = mongoTemplate.aggregate(
-                TypedAggregation,
-                table,
-                Map.class);
-        return aggregationResults0;
-    }
 
     /**
      * @param filepath
@@ -899,7 +472,7 @@ public class ImportService {
     }
 
     /**
-     * csv数据分发
+     * 数据分发
      *
      * @param csvData
      * @return
@@ -991,7 +564,7 @@ public class ImportService {
                 // doc.put("zone", i + skip);
                 i++;
                 batchDocuments.add(doc);
-                if (batchDocuments.size() >= 5000) {
+                if (batchDocuments.size() >= Integer.parseInt(environment.getProperty("putIn"))) {
                     collection.insertMany(batchDocuments, options);
                     batchDocuments.clear();
                 }
@@ -1239,6 +812,8 @@ public class ImportService {
     }
 
     /**
+     * 包装量纲
+     *
      * @param unit
      * @param value
      * @return
