@@ -5856,55 +5856,105 @@ class DataConversionApplicationTests {
 
     @Test
     void openCsv() throws Exception {
-        int size = 12;
-        {
-            try {
-                //初始化线程安全集合存储数据 一条行数据对应一个List<String>
-                List<List<String>> list = new ArrayList<>();
-                // 拼接换行数据需要
-                Collection<String> joint = Collections.synchronizedCollection(new ArrayList<>());
-                // 获取文件
-                File touch = FileUtil.touch("D:\\桌面\\换行.csv");
-                // 创建一个文件输入流
-                FileInputStream fileInputStream = IoUtil.toStream(touch);
-                // 创建一个可以读取UTF-8编码的BufferedReader
-                BufferedReader utf8Reader = IoUtil.getUtf8Reader(fileInputStream);
-                // 读取所有行并转换为Stream(延迟求值) 需要处理才会读取
-                Stream<String> lines = utf8Reader.lines();
-                //System.out.println(lines.count());
-                // 对每一行进行并行处理
-                lines.parallel().forEach(s -> {
-                    synchronized (this){
-                        List<String> next = new ArrayList<>();
-                        try (CSVReader reader = new CSVReader(new StringReader(s))) {
-                            // 读取下一行并添加到列表中
-                            next = Arrays.asList(reader.readNext());
-                            if(next.size()<12)
-                                System.out.println("xx");
-                            list.add(next);
-                        } catch (IOException | CsvValidationException e) {
-                            //利用csv引号异常判断出换行
-                            joint.addAll(next);
-                            if (joint.size() == size) {
-                                List<String> jointCopy = new ArrayList<>(joint); // 创建joint的副本
-                                System.out.println("换行"+jointCopy);
-                                joint.clear();
-                                list.add(jointCopy);
-                            }
-                        }
+        int size = 48;
+        //初始化线程安全集合存储数据 一条行数据对应一个List<String>
+        Collection<List<String>> list = new ArrayList<>();
+        // 拼接换行数据需要
+        Collection<String> joint = Collections.synchronizedCollection(new ArrayList<>());
+        // 获取文件
+        File touch = FileUtil.touch("D:\\桌面\\第一人民门诊明细.csv");
+        // 创建一个文件输入流
+        FileInputStream fileInputStream = IoUtil.toStream(touch);
+        // 创建一个可以读取UTF-8编码的BufferedReader
+        BufferedReader utf8Reader = IoUtil.getUtf8Reader(fileInputStream);
+        // 读取所有行并转换为Stream(延迟求值) 需要处理才会读取
+        Stream<String> lines = utf8Reader.lines();
+        // 对每一行进行并行处理
+        lines.parallel().forEach(s -> {
+            Collection<String> next = new ArrayList<>();
+            try (CSVReader reader = new CSVReader(new StringReader(s))) {
+                // 读取下一行并添加到列表中
+                next = Arrays.asList(reader.readNext());
+                if (next.size() < size) {
+                    joint.addAll(next);
+                    if (joint.size() == size) {
+                        List<String> jointCopy = new ArrayList<>(joint); // 创建joint的副本
+                        joint.clear();
+                        list.add(jointCopy);
                     }
-                });
+                } else if (next.size() == size) {
+                    list.add(new ArrayList<>(next));
+                }
             } catch (Exception e) {
-                e.printStackTrace();
             }
+        });
+        for (List<String> strings : list) {
+            for (String s1 : strings) {
+                System.out.println(s1);
+            }
+            System.out.println("==============");
         }
     }
 
 
     @Autowired
     private Environment environment;
+
     @Test
-    void mm(){
-        System.out.println(environment.getProperty("zhenduan.eposide_id"));
+    private Collection<List<String>> dataExtraction(String filepath, int size, int theadNum) {
+        try {
+            // 设置并行流线程数
+            System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", String.valueOf(theadNum));
+            //初始化线程安全集合存储数据 一条行数据对应一个List<String>
+            Collection<List<String>> list = Collections.synchronizedCollection(new ArrayList<>());
+            // 获取文件
+            File touch = FileUtil.touch(filepath);
+            // 创建一个文件输入流
+            FileInputStream fileInputStream = IoUtil.toStream(touch);
+            // 创建一个可以读取UTF-8编码的BufferedReader
+            BufferedReader utf8Reader = IoUtil.getUtf8Reader(fileInputStream);
+            // 读取所有行并转换为Stream(延迟求值)
+            Stream<String> lines = utf8Reader.lines();
+            //System.out.println(lines.count());
+            // 对每一行进行并行处理
+            lines.parallel().forEach(s -> {
+                Collection<String> next = new ArrayList<>();
+                // 拼接换行数据需要
+                Collection<String> joint = Collections.synchronizedCollection(new ArrayList<>());
+                // openCSV处理最后一位为空情况
+                try (CSVReader reader = new CSVReader(new StringReader(s))) {
+                    // 读取下一行并添加到列表中
+                    next = Arrays.asList(reader.readNext());
+                    //满足换行情况
+                    if (next.size() < size) {
+                        //拼接
+                        joint.addAll(next);
+                        //满足一条
+                        if (joint.size() == size) {
+                            List<String> jointCopy = new ArrayList<>(joint); // 创建joint的副本
+                            joint.clear();
+                            list.add(jointCopy);
+                        }
+                    } else if (next.size() == size) {
+                        list.add(new ArrayList<>(next));
+                    }
+                } catch (Exception e) {
+                }
+            });
+            return list;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    @Test
+    void ttt(){
+        Document d = new Document();
+        xxx(d);
+        System.out.println(d.get("1"));
+    }
+    void xxx(Document d){
+        d.put("1","1");
     }
 }

@@ -22,7 +22,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import static com.mongodb.WriteConcern.ACKNOWLEDGED;
+import static com.mongodb.WriteConcern.UNACKNOWLEDGED;
 import static java.lang.Math.floor;
 
 @Service
@@ -40,7 +40,8 @@ public class gapImport {
     @Value("${spring.data.mongodb.host:}")
     private String host;
 
-    private String outGapThreadDispatch(List<String> socialCard, int theadNum, String collectionName, int dataSize) {
+    // 门诊间隔多线程控制
+    private String outGapThreadDispatch(List<String> socialCard, int theadNum, String collectionName) {
         CountDownLatch latch = new CountDownLatch(theadNum);
         List<List<String>> sCard = dataDistribution(socialCard, theadNum);
 
@@ -49,7 +50,7 @@ public class gapImport {
         for (int i = 0; i < sCard.size(); i++) {
             int finalI = i;
             executor.execute(() -> {
-                outpatientGapImport(sCard.get(finalI), collectionName);
+                outPatientGapImport(sCard.get(finalI), collectionName);
                 latch.countDown();
             });
             while (!executor.isTerminated()) {
@@ -60,7 +61,7 @@ public class gapImport {
         return "complete";
     }
 
-    private String stayGapThreadDispatch(List<String> socialCard, int theadNum, String collectionName, int dataSize) {
+    private String stayGapThreadDispatch(List<String> socialCard, int theadNum, String collectionName) {
         CountDownLatch latch = new CountDownLatch(theadNum);
         List<List<String>> sCard = dataDistribution(socialCard, theadNum);
 
@@ -80,21 +81,28 @@ public class gapImport {
         return "complete";
     }
 
+    /**
+     *  住院间隔导入
+     * @param socialCard
+     * @param collectionName
+     */
     private void stayGapImport(List<String> socialCard, String collectionName) {
-        String mingxi = environment.getProperty("mingxiku");
-        String jiesuan = environment.getProperty("jiesuanku");
-        String zhenduan = environment.getProperty("zhenduanku");
+        // 明细库
+        String detailsLibrary = environment.getProperty("detailsLibrary");
+        // 结算库
+        String settlementOfPaymentLibrary = environment.getProperty("settlementOfPaymentLibrary");
+        // 诊疗库
+        String diagnosisLibrary = environment.getProperty("diagnosisLibrary");
 
         String connectionString = "mongodb://" + this.host + ":" + this.port;
         // 构建 MongoClientSettings
         MongoClientSettings settings;
         settings = MongoClientSettings.builder()
                 .applyConnectionString(new ConnectionString(connectionString))
-                .writeConcern(ACKNOWLEDGED)
+                .writeConcern(UNACKNOWLEDGED)
                 .build();
 
         InsertManyOptions options = new InsertManyOptions()
-                .bypassDocumentValidation(false)
                 .ordered(false);
 
         //开启MongoDB
@@ -109,13 +117,13 @@ public class gapImport {
             List<Document> batchDocuments = new ArrayList<>();
             for (String s : socialCard) {
                 Query query = Query.query(Criteria.where("social_card").is(s).andOperator(criteria)).with(Sort.by(Sort.Direction.ASC, "in_date"));
-                query.fields().include("card_id","social_card","age",
-                        "patient_name","sex","birthday","company_name",
-                        "area_name_person","benefit_type","medical_mode",
-                        "medical_name","medical_type","medical_grade",
-                        "medical_nature","in_date","out_date","hospital_num").exclude("_id");
+                query.fields().include("card_id", "social_card", "age",
+                        "patient_name", "sex", "birthday", "company_name",
+                        "area_name_person", "benefit_type", "medical_mode",
+                        "medical_name", "medical_type", "medical_grade",
+                        "medical_nature", "in_date", "out_date", "hospital_num", "money_total", "money_medical").exclude("_id");
 
-                List<Map> record = mongoTemplate.find(query, Map.class, jiesuan);
+                List<Map> record = mongoTemplate.find(query, Map.class, settlementOfPaymentLibrary);
                 //单条容器
                 Document doc = new Document();
                 if (record.size() <= 1) {
@@ -126,9 +134,10 @@ public class gapImport {
                 Long before = 0L;
 
                 for (int i = 1; i < record.size(); i++) {
-                    Query zquery = Query.query(Criteria.where("eposide_id").is(record.get(i).get("eposide_id")).andOperator(criteria));
-                    zquery.fields().include("main_flag","diag_name").exclude("_id");
-                    Map zrecord = mongoTemplate.findOne(zquery, Map.class, zhenduan);
+                    Criteria criteriaz = Criteria.where("inout_diag_type").in("2","3");
+                    Query zquery = Query.query(Criteria.where("eposide_id").is(record.get(i).get("eposide_id")).andOperator(criteriaz));
+                    zquery.fields().include("main_flag", "diag_name").exclude("_id");
+                    Map zrecord = mongoTemplate.findOne(zquery, Map.class, diagnosisLibrary);
                     if (zrecord != null && zrecord.isEmpty()) {
                         record.get(i).put("main_flag", zrecord.get("main_flag"));
                         record.get(i).put("diag_name", zrecord.get("diag_name"));
@@ -139,67 +148,81 @@ public class gapImport {
                 }
                 for (int i = 1; i < record.size(); i++) {
                     // 系统字段
-                    String mainId = UUID.randomUUID().toString();
-                    doc.put("_id", mainId);
                     doc.put("create_time", System.currentTimeMillis());
                     doc.put("create_account", "admin");
-                    doc.put("category_id", "ed8eb695-2604-453e-a767-99fca467a898");
+                    doc.put("category_id", environment.getProperty("outPatientGapCategoryId"));
                     doc.put("data_status", "已归档");
                     doc.put("data_type", 1);
                     doc.put("priority", "");
-                    doc.put("bind_id", mainId);
-                    doc.put("corp_id", "nsrcu88p7uy22m7i9ioz");
-                    doc.put("parent_corp_id_list", new ArrayList<>());
+                    doc.put("bind_id", "");
+                    doc.put("corp_id", environment.getProperty("corp_id"));
+                    doc.put("parent_corp_id_list", "");
                     doc.put("bind_category_id", "");
-                    //
+                    //业务字段
+                    doc = stayGapBusinessField(record.get(i), doc);
+                    //计算字段
+                    // 门诊间隔天数
+                    if (diffDay) {
+                        before = Long.parseLong(record.get(i - 1).get("out_date").toString());
+                        Long after = Long.parseLong(record.get(i).get("in_date").toString());
+                        Double day = ((double) before - after) / (1000 * 3600 * 24);
+                        if (day < 1) {
+                            diffDay = false;
+                        } else {
+                            doc.put("interval_day", pack("天", day));
+                            diffDay = true;
+                        }
+                    } else {
+                        Long after = Long.parseLong(record.get(i).get("cost_time").toString());
+                        Double day = ((double) before - after) / (1000 * 3600 * 24);
+                        if (day < 1) {
+                            diffDay = false;
+                        } else {
+                            doc.put("interval_day", pack("天", day));
+                            diffDay = true;
+                        }
+                    }
+                    batchDocuments.add(doc);
+                    //满5000入库
+                    if (batchDocuments.size() >= Integer.parseInt(environment.getProperty("putIn"))) {
+                        collection.insertMany(batchDocuments, options);
+                        batchDocuments.clear();
+                    }
                 }
             }
+            if (batchDocuments.size() > 0) {
+                collection.insertMany(batchDocuments, options);
+                batchDocuments.clear();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
-    private void outpatientGapImport(List<String> socialCard, String collectionName) {
-
-        String mingxi = environment.getProperty("mingxiku");
-        String jiesuan = environment.getProperty("jiesuanku");
-        String zhenduan = environment.getProperty("zhenduanku");
+    /**
+     *  门诊间隔导入
+     * @param socialCard
+     * @param collectionName
+     */
+    private void outPatientGapImport(List<String> socialCard, String collectionName) {
+        // 明细库
+        String detailsLibrary = environment.getProperty("detailsLibrary");
+        // 结算库
+        String settlementOfPaymentLibrary = environment.getProperty("settlementOfPaymentLibrary");
+        // 诊疗库
+        String diagnosisLibrary = environment.getProperty("diagnosisLibrary");
 
         String connectionString = "mongodb://" + this.host + ":" + this.port;
         // 构建 MongoClientSettings
         MongoClientSettings settings;
         settings = MongoClientSettings.builder()
                 .applyConnectionString(new ConnectionString(connectionString))
-                .writeConcern(ACKNOWLEDGED)
+                .writeConcern(UNACKNOWLEDGED)
                 .build();
 
         InsertManyOptions options = new InsertManyOptions()
-                .bypassDocumentValidation(false)
                 .ordered(false);
-       /* // 根据ipone构建one
-        String connectionStringOne = "mongodb://" + ipOne;
-        // 构建 MongoClientSettings
-        MongoClientSettings settingsOne;
-        settings = MongoClientSettings.builder()
-                .applyConnectionString(new ConnectionString(connectionStringOne))
-                .writeConcern(ACKNOWLEDGED)
-                .build();
 
-        // 根据iptwo构建two
-        String connectionStringTwo = "mongodb://" + ipTwo;
-        // 构建 MongoClientSettings
-        MongoClientSettings settingsTwo;
-        settings = MongoClientSettings.builder()
-                .applyConnectionString(new ConnectionString(connectionStringTwo))
-                .writeConcern(ACKNOWLEDGED)
-                .build();
-
-        // 根据ipthree构建two
-        String connectionStringThree = "mongodb://" + ipThree;
-        // 构建 MongoClientSettings
-        MongoClientSettings settingsThree;
-        settings = MongoClientSettings.builder()
-                .applyConnectionString(new ConnectionString(connectionStringThree))
-                .writeConcern(ACKNOWLEDGED)
-                .build();*/
 
         //开启MongoDB
         String dbName = "ns-saas";
@@ -214,16 +237,21 @@ public class gapImport {
             List<Document> batchDocuments = new ArrayList<>();
             for (String s : socialCard) {
                 Query query = Query.query(Criteria.where("social_card").is(s).andOperator(criteria)).with(Sort.by(Sort.Direction.ASC, "cost_time"));
-                List<Map> record = mongoTemplate.find(query, Map.class, mingxi);
+                query.fields().include("medical_name", "social_card", "card_id", "patient_name", "benefit_type",
+                        "medical_mode", "eposide_id", "cost_time", "item_name", "charge_type", "money", "money_medical",
+                        "dept_name", "discharge_dept_name").exclude("_id");
+                List<Map> record = mongoTemplate.find(query, Map.class, detailsLibrary);
                 //单条容器
                 Document doc = new Document();
                 if (record.size() <= 1) {
                     continue;
                 }
-                Query jquery = Query.query(Criteria.where("social_card").is(s).andOperator(criteria)).with(Sort.by(Sort.Direction.ASC, "in_date"));
-                List<Map> jierecord = mongoTemplate.find(jquery, Map.class, jiesuan);
+                Query jquery = Query.query(Criteria.where("social_card").is(s).andOperator(criteria)).with(Sort.by(Sort.Direction.ASC, "clear_time"));
+                jquery.fields().include("area_name_person", "medical_type", "medical_grade", "medical_nature",
+                        "birthday", "age", "sex", "company_name").exclude("_id");
+                List<Map> jierecord = mongoTemplate.find(jquery, Map.class, settlementOfPaymentLibrary);
                 //是否异天标志
-                Boolean diffDay = true;
+                boolean diffDay = true;
                 Long before = 0L;
                 //联表查询字段塞入明细记录中
                 for (int i = 1; i < record.size(); i++) {
@@ -253,17 +281,15 @@ public class gapImport {
                 }
                 for (int i = 1; i < record.size(); i++) {
                     // 系统字段
-                    String mainId = UUID.randomUUID().toString();
-                    doc.put("_id", mainId);
                     doc.put("create_time", System.currentTimeMillis());
                     doc.put("create_account", "admin");
                     doc.put("category_id", "ed8eb695-2604-453e-a767-99fca467a898");
                     doc.put("data_status", "已归档");
                     doc.put("data_type", 1);
                     doc.put("priority", "");
-                    doc.put("bind_id", mainId);
-                    doc.put("corp_id", "nsrcu88p7uy22m7i9ioz");
-                    doc.put("parent_corp_id_list", new ArrayList<>());
+                    doc.put("bind_id","");
+                    doc.put("corp_id", environment.getProperty("corp_id"));
+                    doc.put("parent_corp_id_list", "");
                     doc.put("bind_category_id", "");
                     // 业务字段
                     doc = outpatientGapBusinessField(record.get(i), doc);
@@ -272,7 +298,7 @@ public class gapImport {
                     if (diffDay) {
                         before = Long.parseLong(record.get(i - 1).get("cost_time").toString());
                         Long after = Long.parseLong(record.get(i).get("cost_time").toString());
-                        Double day = ((double) before - after) / (1000 * 3600 * 24);
+                        double day = ((double) before - after) / (1000 * 3600 * 24);
                         if (day < 1) {
                             diffDay = false;
                         } else {
@@ -294,6 +320,7 @@ public class gapImport {
                     Set<String> drugType = new HashSet<>();
                     Double drugMoney = 0.0;
                     for (Map map : record) {
+                        //是否按照医保目录名称
                         if (map.get("charge_type").toString().contains("药")) {
                             drugType.add((String) map.get("charge_type"));
                             drugMoney += Double.parseDouble(map.get("money").toString());
@@ -367,14 +394,14 @@ public class gapImport {
         doc.put("medical_nature", map.get("medical_nature"));
 //            科室名称
         doc.put("diag_dept", map.get("in_date"));
-//            执行科室名称
 //            主诊疾病名称
+        if (map.get("main_flag").equals("1")) {
+            doc.put("diag_name", map.get("diag_name"));
+        }
 //            总金额
-        Map<String, Object> total = pack("元", map.get(""));
-        doc.put("money_total", total);
+        doc.put("money_total", pack("元", map.get("money_total")));
 //            医保范围费用
-        Map<String, Object> health = pack("元", map.get(""));
-        doc.put("money_medical", health);
+        doc.put("money_medical", pack("元", map.get("money_medical")));
 
         return doc;
     }

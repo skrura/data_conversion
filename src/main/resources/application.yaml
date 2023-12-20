@@ -16,14 +16,27 @@ spring:
     timeout: 30000
 # 入库数量
 putIn: 5000
+# 明细库
+detailsLibrary:
+# 诊疗表库
+diagnosisLibrary:
+# 结算库
+settlementOfPaymentLibrary:
 
-mingxiku:
+# 租户id
+corp_id:
+# 明细分类id
+detailsCategoryId:
+# 诊断分类id
+diagnosisCategoryId:
+# 结算分类id
+settlementOfPaymentCategoryId:
+# 门诊间隔分类id
+outPatientGapCategoryId:
+# 住院间隔分类id
+stayGapCategoryId:
 
-zhenduanku:
-
-jiesuanku:
-
-zhenduan:
+diagnosis:
   # 就诊号
   eposide_id: 1
   # 出入院诊断类别
@@ -47,7 +60,7 @@ zhenduan:
   # 诊断时间
   diag_time: 11
 
-jiesuan:
+settlementOfPayment:
   #结算单据号
   bill_id: 1
   #统筹区名称
@@ -120,7 +133,7 @@ jiesuan:
   discharge_kind: 35
   #异地就诊标志
   nonlocal_org_sign: 36
-mingxi:
+details:
   #统筹区划代码
   area_code: 1
   #参保人统筹区代码

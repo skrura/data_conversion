@@ -18,7 +18,8 @@ public class ImportController {
      * @param filepath
      * @param target
      * @param theadNum
-     * @param size
+     * @param columnSize
+     * @param rowsSize
      * @return
      */
     @GetMapping("csv")
@@ -28,16 +29,17 @@ public class ImportController {
                             @RequestParam(required = true, defaultValue = "") int theadNum,
                             @RequestParam(required = true, defaultValue = "") int zoneMin,
                             @RequestParam(required = true, defaultValue = "") int zoneMax,
-                            @RequestParam(required = true, defaultValue = "") int size) {
-        return importService.importsDataOpt(collectionName, filepath, target,zoneMin,zoneMax, size, theadNum);
+                            @RequestParam(required = true, defaultValue = "") int columnSize,
+                            @RequestParam(required = true, defaultValue = "") long rowsSize) {
+        return importService.importsDataOpt(collectionName, filepath, target, zoneMin, zoneMax, columnSize, rowsSize, theadNum);
     }
 
 
     @GetMapping("yibaomingxi")
     private String WideTable(@RequestParam(required = true, defaultValue = "") String collectionName,
                              @RequestParam(required = true, defaultValue = "") int theadNum,
-                             @RequestParam(required = true, defaultValue = "") int dataSize){
-        return importService.wideControl(collectionName,theadNum,dataSize);
+                             @RequestParam(required = true, defaultValue = "") int dataSize) {
+        return importService.wideControl(collectionName, theadNum, dataSize);
     }
 
 
