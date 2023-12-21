@@ -28,6 +28,9 @@ import static java.lang.Math.floor;
 @Service
 public class gapImport {
 
+    @Value("${spring.data.mongodb.database}")
+    private String dbName;
+
     @Autowired
     private Environment environment;
 
@@ -35,12 +38,20 @@ public class gapImport {
     private MongoTemplate mongoTemplate;
 
 
-    @Value("${spring.data.mongodb.port:}")
+    @Value("${spring.data.mongodb.port}")
     private String port;
-    @Value("${spring.data.mongodb.host:}")
+    @Value("${spring.data.mongodb.host}")
     private String host;
 
-    // 门诊间隔多线程控制
+
+    /**
+     * 门诊间隔多线程控制
+     *
+     * @param socialCard     机器接到社会保障卡号集合
+     * @param theadNum       开启线程数
+     * @param collectionName 入库名
+     * @return 调用完成标识
+     */
     private String outGapThreadDispatch(List<String> socialCard, int theadNum, String collectionName) {
         CountDownLatch latch = new CountDownLatch(theadNum);
         List<List<String>> sCard = dataDistribution(socialCard, theadNum);
@@ -61,6 +72,14 @@ public class gapImport {
         return "complete";
     }
 
+    /**
+     * 住院间隔多线程控制
+     *
+     * @param socialCard     机器接到社会保障卡号集合
+     * @param theadNum       开启线程数
+     * @param collectionName 入库名
+     * @return 调用完成标识
+     */
     private String stayGapThreadDispatch(List<String> socialCard, int theadNum, String collectionName) {
         CountDownLatch latch = new CountDownLatch(theadNum);
         List<List<String>> sCard = dataDistribution(socialCard, theadNum);
@@ -82,9 +101,10 @@ public class gapImport {
     }
 
     /**
-     *  住院间隔导入
-     * @param socialCard
-     * @param collectionName
+     * 住院间隔导入
+     *
+     * @param socialCard     社会保障卡号集合
+     * @param collectionName 入库名
      */
     private void stayGapImport(List<String> socialCard, String collectionName) {
         // 明细库
@@ -106,7 +126,6 @@ public class gapImport {
                 .ordered(false);
 
         //开启MongoDB
-        String dbName = "ns-saas";
         try (MongoClient mongoClient = MongoClients.create(settings)) {
             MongoDatabase database = mongoClient.getDatabase(dbName);
             MongoCollection<Document> collection = database.getCollection(collectionName);
@@ -130,11 +149,11 @@ public class gapImport {
                     continue;
                 }
                 //是否异天标志
-                Boolean diffDay = true;
-                Long before = 0L;
+                boolean diffDay = true;
+                long before = 0L;
 
                 for (int i = 1; i < record.size(); i++) {
-                    Criteria criteriaz = Criteria.where("inout_diag_type").in("2","3");
+                    Criteria criteriaz = Criteria.where("inout_diag_type").in("2", "3");
                     Query zquery = Query.query(Criteria.where("eposide_id").is(record.get(i).get("eposide_id")).andOperator(criteriaz));
                     zquery.fields().include("main_flag", "diag_name").exclude("_id");
                     Map zrecord = mongoTemplate.findOne(zquery, Map.class, diagnosisLibrary);
@@ -200,7 +219,8 @@ public class gapImport {
     }
 
     /**
-     *  门诊间隔导入
+     * 门诊间隔导入
+     *
      * @param socialCard
      * @param collectionName
      */
@@ -225,7 +245,6 @@ public class gapImport {
 
 
         //开启MongoDB
-        String dbName = "ns-saas";
         try (MongoClient mongoClient = MongoClients.create(settings)) {
             MongoDatabase database = mongoClient.getDatabase(dbName);
             MongoCollection<Document> collection = database.getCollection(collectionName);
@@ -287,7 +306,7 @@ public class gapImport {
                     doc.put("data_status", "已归档");
                     doc.put("data_type", 1);
                     doc.put("priority", "");
-                    doc.put("bind_id","");
+                    doc.put("bind_id", "");
                     doc.put("corp_id", environment.getProperty("corp_id"));
                     doc.put("parent_corp_id_list", "");
                     doc.put("bind_category_id", "");

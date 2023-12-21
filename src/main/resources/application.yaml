@@ -3,38 +3,34 @@ server:
 spring:
   data:
     mongodb:
-      host: 192.168.157.11
-      database: ns-saas
-      port: 27017
+      host: 172.21.0.141
+      database: demo
+      port: 27021
       username: ns-admin
       password: 2b8ba2ded188
       authentication-database: admin
-  redis:
-    host: 192.168.157.11
-    port: 6881
-    database: 0
-    timeout: 30000
 # 入库数量
-putIn: 5000
+putIn: 10000
 # 明细库
-detailsLibrary:
-# 诊疗表库
-diagnosisLibrary:
+detailsLibrary: ""
+# 诊断表库
+diagnosisLibrary: ""
 # 结算库
-settlementOfPaymentLibrary:
+settlementOfPaymentLibrary: ""
 
 # 租户id
-corp_id:
+corp_id: "nsn55n6h7kxm33v956ay"
 # 明细分类id
-detailsCategoryId:
+detailsCategoryId: "nsn55n6h7kxm33v956ay"
 # 诊断分类id
-diagnosisCategoryId:
+diagnosisCategoryId: "nsn55n6h7kxm33v956ay"
 # 结算分类id
-settlementOfPaymentCategoryId:
+settlementOfPaymentCategoryId: "nsn55n6h7kxm33v956ay"
 # 门诊间隔分类id
-outPatientGapCategoryId:
+outPatientGapCategoryId: ""
 # 住院间隔分类id
-stayGapCategoryId:
+stayGapCategoryId: ""
+
 
 diagnosis:
   # 就诊号
@@ -62,77 +58,75 @@ diagnosis:
 
 settlementOfPayment:
   #结算单据号
-  bill_id: 1
+  bill_id: 0
   #统筹区名称
-  area_name: 2
+  area_name: 0
   #参保人统筹区名称
-  area_name_person: 3
-  #医保年度
-  year: 4
+  area_name_person: 0
   #定点机构编码
-  medical_code: 5
+  medical_code: 0
   #定点机构名称
-  medical_name: 6
+  medical_name: 0
   #定点机构类别
-  medical_type: 7
+  medical_type: 0
   #定点机构等级
-  medical_grade: 8
+  medical_grade: 0
   #定点机构性质
-  medical_nature: 9
+  medical_nature: 0
   #社会保障卡号
-  social_card: 10
+  social_card: 0
   #患者证件号码
-  card_id: 11
+  card_id: 0
   #患者姓名
-  patient_name: 12
-  #患者出生日期
-  birthday: 13
+  patient_name: 1
+  #患者出生日期 (转时间戳)
+  birthday: 0
   #患者年龄
-  age: 14
+  age: 1
   #性别
-  sex: 15
+  sex: 0
   #单位名称
-  company_name: 16
+  company_name: 0
   #险种类型
-  benefit_type: 17
+  benefit_type: 0
   #医疗类别
-  medical_mode: 18
+  medical_mode: 0
   #就诊号
-  eposide_id: 19
-  #费用结算时间
-  clear_time: 20
+  eposide_id: 0
+  #费用结算时间 （时间戳）
+  clear_time: 0
   #医疗费总额
-  money_total: 21
+  money_total: 14
   #医保范围费用
-  money_medical: 22
+  money_medical: 14
   #特殊病种标识
-  is_special: 23
+  is_special: 0
   #入院日期
-  in_date: 24
+  in_date: 0
   #出院日期
-  out_date: 25
+  out_date: 0
   #住院天数
-  hospital_num: 26
+  hospital_num: 1
   #入院诊断疾病编码
-  in_diagnose_code: 27
+  in_diagnose_code: 0
   #入院疾病名称
-  in_diagnose_name: 28
+  in_diagnose_name: 0
   #出院疾病诊断编码
-  out_diagnose_code: 29
+  out_diagnose_code: 0
   #出院疾病名称
-  out_diagnose_name: 30
+  out_diagnose_name: 0
   #入院科室名称
-  dept_name: 31
+  dept_name: 0
   #出院科室名称
-  out_dept_name: 32
+  out_dept_name: 0
   #主治医生代码
-  doctor_code: 33
+  doctor_code: 0
   #主治医生
-  doctor_name: 34
+  doctor_name: 0
   #离院方式
-  discharge_kind: 35
+  discharge_kind: 0
   #异地就诊标志
-  nonlocal_org_sign: 36
+  nonlocal_org_sign: 0
 details:
   #统筹区划代码
   area_code: 1
